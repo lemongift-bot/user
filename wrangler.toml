@@ -1,4 +1,4 @@
-name = "lemongift-worker"
+name = "user"
 main = "index.js"
 compatibility_date = "2025-01-01"
 
