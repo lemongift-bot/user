@@ -1,13 +1,14 @@
 import { createClient } from "@libsql/client/web";
 
 export async function registerUser(request, env) {
-  // ===== CORS =====
+  // ===== GLOBAL CORS =====
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  // Preflight
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -19,12 +20,12 @@ export async function registerUser(request, env) {
     );
   }
 
-  // ===== Query params =====
+  // ===== QUERY PARAMS =====
   const url = new URL(request.url);
 
   const user_id = url.searchParams.get("user_id"); // MAJBURIY
   const name = url.searchParams.get("name");
-  const username = url.searchParams.get("username");
+  const first_name = url.searchParams.get("first_name");
   const photo_url = url.searchParams.get("photo_url");
 
   if (!user_id) {
@@ -34,47 +35,57 @@ export async function registerUser(request, env) {
     );
   }
 
-  // ===== Turso ulanish (INLINE) =====
+  // ===== TURSO INLINE =====
   const db = createClient({
     url: env.TURSO_URL,
     authToken: env.TURSO_AUTH_TOKEN,
   });
 
   try {
-    // user bor-yo‘qligini tekshiramiz
+    // User borligini tekshiramiz
     const existing = await db.execute(
       "SELECT user_id FROM users WHERE user_id = ?",
       [user_id]
     );
 
+    // Agar BOR bo‘lsa → UPDATE
     if (existing.rows.length > 0) {
+      await db.execute(
+        `
+        UPDATE users
+        SET
+          name = ?,
+          first_name = ?,
+          photo_url = ?
+        WHERE user_id = ?
+        `,
+        [name, first_name, photo_url, user_id]
+      );
+
       return new Response(
         JSON.stringify({
-          status: "exists",
-          message: "User already registered",
+          status: "updated",
+          message: "Foydalanuvchi malumotlari yangilandi",
           user_id,
         }),
         { headers: corsHeaders }
       );
     }
 
-    // yangi user qo‘shamiz
+    // Agar YO‘Q bo‘lsa → INSERT
     await db.execute(
-      `INSERT INTO users (user_id, name, username, photo_url)
-       VALUES (?, ?, ?, ?)`,
-      [user_id, name, username, photo_url]
+      `
+      INSERT INTO users (user_id, name, first_name, photo_url)
+      VALUES (?, ?, ?, ?)
+      `,
+      [user_id, name, first_name, photo_url]
     );
 
     return new Response(
       JSON.stringify({
-        status: "ok",
-        message: "User registered successfully",
-        user: {
-          user_id,
-          name,
-          username,
-          photo_url,
-        },
+        status: "created",
+        message: "Xisob Yaratildi",
+        user_id,
       }),
       { headers: corsHeaders }
     );
@@ -88,4 +99,4 @@ export async function registerUser(request, env) {
       { status: 500, headers: corsHeaders }
     );
   }
-      }
+}
